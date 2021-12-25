@@ -5,14 +5,10 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"terra/terra_observer/model"
 
 	"github.com/gorilla/websocket"
 )
-
-type subscribeData struct {
-	Subscribe string `json:"subscribe"`
-	ChainId   string `json:"chain_id"`
-}
 
 func main() {
 	interrupt := make(chan os.Signal, 1)
@@ -24,7 +20,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	sub := &subscribeData{
+	sub := &model.Subscribe{
 		Subscribe: "new_txs",
 		ChainId:   "columbus-5",
 	}
@@ -44,13 +40,31 @@ func main() {
 
 	go func() {
 		defer close(done)
+		observerResponse := model.ObserverResponse{}
 		for {
-			_, msg, err := c.ReadMessage()
+			err := c.ReadJSON(&observerResponse)
 			if err != nil {
 				panic(err)
-				return
 			}
-			fmt.Printf("recv: %s\n\n", msg)
+			fmt.Println("Read data on block: " + observerResponse.Data.Block.Header.Height)
+			for i, _ := range observerResponse.Data.Txs {
+				for j, _ := range observerResponse.Data.Txs[i].Body.Messages {
+					fmt.Println(observerResponse.Data.Txs[i].RawLog)
+					fmt.Println("MsgType: " + observerResponse.Data.Txs[i].Events[j].Type)
+
+					if observerResponse.Data.Txs[i].Body.Messages[j].Contract == "terra19qx5xe6q9ll4w0890ux7lv2p4mf3csd4qvt3ex" {
+						fmt.Println("Found execute on terraswap router!")
+						fmt.Println("Offer assets: " + observerResponse.Data.Txs[i].Body.Messages[j].ExecuteMsg.Swap.OfferAsset.Info.NativeToken.Denom)
+						// if observerResponse.Data.Txs[i].Body.Messages[j].Type == "/terra.wasm.v1beta1.MsgExecuteContract" {
+						// 	// execute contract only!
+						// 	fmt.Println("Type: " + observerResponse.Data.Txs[i].Body.Messages[j].Type)
+						// 	fmt.Println("From: " + observerResponse.Data.Txs[i].Body.Messages[j].Sender)
+						// 	fmt.Println("Amount: " + observerResponse.Data.Txs[i].Body.Messages[j].ExecuteMsg.Swap.OfferAsset.Amount)
+						// 	fmt.Println("Denom: " + observerResponse.Data.Txs[i].Body.Messages[j].ExecuteMsg.Swap.OfferAsset.Info.NativeToken.Denom)
+						// }
+					}
+				}
+			}
 		}
 	}()
 
